@@ -1,0 +1,100 @@
+import React, { useState } from "react";
+import { derivative, evaluate } from "mathjs";
+import Algebrite from "algebrite";
+import { MathJax, MathJaxContext } from "better-react-mathjax";
+import { Line } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  LineElement,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+} from "chart.js";
+
+ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement);
+
+function App() {
+  const [expression, setExpression] = useState("x^2");
+  const [mode, setMode] = useState("derivative");
+  const [result, setResult] = useState("");
+  const [graphData, setGraphData] = useState(null);
+
+  const handleCalculate = () => {
+    try {
+      let output;
+      if (mode === "derivative") {
+        output = derivative(expression, "x").toString();
+      } else if (mode === "integral") {
+        output = Algebrite.integral(expression).toString();
+      }
+      setResult(output);
+    } catch (err) {
+      setResult("Invalid expression");
+    }
+  };
+
+  const handlePlot = () => {
+    const xValues = Array.from({ length: 100 }, (_, i) => i / 5 - 10); // x from -10 to 10
+    const yValues = [];
+
+    try {
+      for (let x of xValues) {
+        const y = evaluate(expression, { x });
+        yValues.push(typeof y === "number" ? y : NaN);
+      }
+
+      setGraphData({
+        labels: xValues,
+        datasets: [
+          {
+            label: `f(x) = ${expression}`,
+            data: yValues,
+            fill: false,
+            borderColor: "blue",
+            tension: 0.2,
+          },
+        ],
+      });
+    } catch (err) {
+      setGraphData(null);
+      alert("Invalid expression for plotting");
+    }
+  };
+
+  return (
+    <MathJaxContext>
+      <div style={{ padding: "2rem", fontFamily: "Arial" }}>
+        <h2>🧮 Calculus App</h2>
+        <input
+          type="text"
+          value={expression}
+          onChange={(e) => setExpression(e.target.value)}
+          placeholder="Enter function, e.g. x^2"
+          style={{ width: "300px", padding: "0.5rem", marginRight: "1rem" }}
+        />
+        <select value={mode} onChange={(e) => setMode(e.target.value)}>
+          <option value="derivative">Derivative</option>
+          <option value="integral">Integral</option>
+        </select>
+        <button onClick={handleCalculate} style={{ marginLeft: "1rem" }}>
+          Calculate
+        </button>
+        <button onClick={handlePlot} style={{ marginLeft: "1rem" }}>
+          Plot Graph
+        </button>
+
+        <div style={{ marginTop: "2rem", fontSize: "1.5rem" }}>
+          {result && <MathJax>{`\\(${result}\\)`}</MathJax>}
+        </div>
+
+        <div style={{ marginTop: "3rem" }}>
+          {graphData && (
+            <Line data={graphData} options={{ responsive: true }} />
+          )}
+        </div>
+      </div>
+    </MathJaxContext>
+  );
+}
+
+export default App;
