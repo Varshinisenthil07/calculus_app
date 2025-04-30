@@ -9,92 +9,224 @@ import {
   CategoryScale,
   LinearScale,
   PointElement,
+  Tooltip,
+  Legend,
 } from "chart.js";
 
-ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement);
+ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Tooltip, Legend);
 
 function App() {
   const [expression, setExpression] = useState("x^2");
   const [mode, setMode] = useState("derivative");
+  const [lowerLimit, setLowerLimit] = useState("");
+  const [upperLimit, setUpperLimit] = useState("");
   const [result, setResult] = useState("");
   const [graphData, setGraphData] = useState(null);
+  const [plotType, setPlotType] = useState("original");
+  const [history, setHistory] = useState([]);
 
   const handleCalculate = () => {
     try {
-      let output;
+      let output = "";
       if (mode === "derivative") {
-        output = derivative(expression, "x").toString();
+        output = Algebrite.run(`d(${expression})`);
       } else if (mode === "integral") {
         output = Algebrite.integral(expression).toString();
+      } else if (mode === "definite") {
+        if (!lowerLimit || !upperLimit) {
+          setResult("Please enter both limits");
+          return;
+        }
+        output = Algebrite.run(`defint(${expression}, x, ${lowerLimit}, ${upperLimit})`);
       }
       setResult(output);
-    } catch (err) {
-      setResult("Invalid expression");
+      setHistory([...history, { expression, mode, result: output }]);
+    } catch {
+      setResult("❌ Invalid expression");
     }
   };
 
   const handlePlot = () => {
-    const xValues = Array.from({ length: 100 }, (_, i) => i / 5 - 10); // x from -10 to 10
+    const xValues = Array.from({ length: 200 }, (_, i) => i * 0.1 - 10);
     const yValues = [];
-
     try {
       for (let x of xValues) {
-        const y = evaluate(expression, { x });
-        yValues.push(typeof y === "number" ? y : NaN);
+        let y = null;
+        if (plotType === "original") {
+          y = evaluate(expression, { x });
+        } else if (plotType === "derivative") {
+          y = derivative(expression, "x").evaluate({ x });
+        } else if (plotType === "integral") {
+          const integralExp = Algebrite.integral(expression).toString();
+          y = evaluate(integralExp, { x });
+        }
+        y = isFinite(y) ? y : NaN;
+        yValues.push(y);
       }
-
       setGraphData({
         labels: xValues,
         datasets: [
           {
-            label: `f(x) = ${expression}`,
+            label: `${plotType} of f(x)`,
             data: yValues,
-            fill: false,
-            borderColor: "blue",
-            tension: 0.2,
+            borderColor: "#00FFCC",
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: true,
+            backgroundColor: "rgba(0,255,204,0.05)",
           },
         ],
       });
-    } catch (err) {
-      setGraphData(null);
-      alert("Invalid expression for plotting");
+    } catch {
+      alert("Cannot plot this expression");
     }
   };
 
   return (
     <MathJaxContext>
-      <div style={{ padding: "2rem", fontFamily: "Arial" }}>
-        <h2>🧮 Calculus App</h2>
-        <input
-          type="text"
-          value={expression}
-          onChange={(e) => setExpression(e.target.value)}
-          placeholder="Enter function, e.g. x^2"
-          style={{ width: "300px", padding: "0.5rem", marginRight: "1rem" }}
-        />
-        <select value={mode} onChange={(e) => setMode(e.target.value)}>
-          <option value="derivative">Derivative</option>
-          <option value="integral">Integral</option>
-        </select>
-        <button onClick={handleCalculate} style={{ marginLeft: "1rem" }}>
-          Calculate
-        </button>
-        <button onClick={handlePlot} style={{ marginLeft: "1rem" }}>
-          Plot Graph
-        </button>
+      <div style={styles.bg}>
+        <div style={styles.card}>
+          <h2 style={styles.title}>🧠 Advanced Calculus Visualizer</h2>
+          <input
+            type="text"
+            value={expression}
+            onChange={(e) => setExpression(e.target.value)}
+            placeholder="e.g. x^2, sin(x), log(x)"
+            style={styles.input}
+          />
+          <div style={styles.controls}>
+            <select style={styles.select} value={mode} onChange={(e) => setMode(e.target.value)}>
+              <option value="derivative">Derivative</option>
+              <option value="integral">Indefinite Integral</option>
+              <option value="definite">Definite Integral</option>
+            </select>
+            {mode === "definite" && (
+              <>
+                <input
+                  type="text"
+                  value={lowerLimit}
+                  onChange={(e) => setLowerLimit(e.target.value)}
+                  placeholder="Lower"
+                  style={{ ...styles.input, width: 60 }}
+                />
+                <input
+                  type="text"
+                  value={upperLimit}
+                  onChange={(e) => setUpperLimit(e.target.value)}
+                  placeholder="Upper"
+                  style={{ ...styles.input, width: 60 }}
+                />
+              </>
+            )}
+            <button onClick={handleCalculate} style={styles.button}>
+              🔍 Calculate
+            </button>
+          </div>
 
-        <div style={{ marginTop: "2rem", fontSize: "1.5rem" }}>
-          {result && <MathJax>{`\\(${result}\\)`}</MathJax>}
-        </div>
-
-        <div style={{ marginTop: "3rem" }}>
-          {graphData && (
-            <Line data={graphData} options={{ responsive: true }} />
+          {result && (
+            <div style={styles.result}>
+              <strong>Result:</strong>
+              <MathJax inline>{`\\(${result}\\)`}</MathJax>
+            </div>
           )}
+
+          <hr style={styles.divider} />
+
+          <div>
+            <h4 style={styles.sectionTitle}>📈 Plot Function</h4>
+            <select style={styles.select} value={plotType} onChange={(e) => setPlotType(e.target.value)}>
+              <option value="original">Original</option>
+              <option value="derivative">Derivative</option>
+              <option value="integral">Integral</option>
+            </select>
+            <button onClick={handlePlot} style={styles.button}>
+              📊 Plot
+            </button>
+          </div>
+
+          {graphData && <Line data={graphData} style={{ marginTop: "2rem" }} />}
+
+          <hr style={styles.divider} />
+
+          <div>
+            <h4 style={styles.sectionTitle}>🕒 History</h4>
+            <ul>
+              {history.map((item, idx) => (
+                <li key={idx}>
+                  <code>{item.expression}</code> → <strong>{item.mode}</strong>:{" "}
+                  <MathJax inline>{`\\(${item.result}\\)`}</MathJax>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </div>
     </MathJaxContext>
   );
 }
+
+const styles = {
+  bg: {
+    minHeight: "100vh",
+    padding: "2rem",
+    background: "linear-gradient(135deg, #1e1e2f, #282c34)",
+    color: "#ffffff",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "start",
+    fontFamily: "'Segoe UI', sans-serif",
+  },
+  card: {
+    background: "rgba(255,255,255,0.05)",
+    padding: "2rem",
+    borderRadius: "1rem",
+    width: "100%",
+    maxWidth: "800px",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+    backdropFilter: "blur(10px)",
+  },
+  title: {
+    fontSize: "1.8rem",
+    marginBottom: "1rem",
+  },
+  input: {
+    padding: "0.5rem",
+    borderRadius: "5px",
+    margin: "0.5rem 0.5rem 0.5rem 0",
+    border: "none",
+    width: "200px",
+  },
+  select: {
+    padding: "0.5rem",
+    borderRadius: "5px",
+    margin: "0.5rem 0.5rem 0.5rem 0",
+    border: "none",
+  },
+  button: {
+    padding: "0.5rem 1rem",
+    borderRadius: "5px",
+    background: "#00FFCC",
+    color: "#000",
+    border: "none",
+    fontWeight: "bold",
+    cursor: "pointer",
+  },
+  controls: {
+    display: "flex",
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  result: {
+    fontSize: "1.2rem",
+    margin: "1rem 0",
+  },
+  divider: {
+    margin: "2rem 0",
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  sectionTitle: {
+    marginBottom: "0.5rem",
+  },
+};
 
 export default App;
